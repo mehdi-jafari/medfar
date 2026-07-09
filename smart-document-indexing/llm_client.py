@@ -1,0 +1,94 @@
+"""OpenAI client for loading prompt templates and running pipeline steps."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+PROMPTS_DIR = Path(__file__).parent / "prompts"
+JSON_PROMPTS = {
+    "02_evidence_extraction",
+    "03_entity_extraction",
+    "04_taxonomy_classification",
+    "05_validation",
+}
+
+
+class LLMClient:
+    """Loads markdown prompts and calls OpenAI chat completions."""
+
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+        prompts_dir: Path | None = None,
+    ) -> None:
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "OPENAI_API_KEY is not set. Copy .env.example to .env and add your key."
+            )
+        self.client = OpenAI(api_key=self.api_key)
+        self.prompts_dir = prompts_dir or PROMPTS_DIR
+        self.total_tokens = 0
+
+    def _load_template(self, prompt_name: str) -> str:
+        path = self.prompts_dir / f"{prompt_name}.md"
+        if not path.exists():
+            raise FileNotFoundError(f"Prompt template not found: {path}")
+        return path.read_text(encoding="utf-8")
+
+    def _fill_template(self, template: str, variables: dict[str, str]) -> str:
+        filled = template
+        for key, value in variables.items():
+            filled = filled.replace(f"{{{{{key}}}}}", value)
+        unresolved = re.findall(r"\{\{(\w+)\}\}", filled)
+        if unresolved:
+            logger.warning("Unresolved template variables: %s", unresolved)
+        return filled
+
+    def _call_model(self, prompt: str, json_mode: bool) -> str:
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+
+        response = self.client.chat.completions.create(**kwargs)
+        if response.usage:
+            self.total_tokens += response.usage.total_tokens
+
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Empty response from model")
+        return content.strip()
+
+    def run(self, prompt_name: str, **variables: str) -> str | dict[str, Any]:
+        """Run a named prompt. Returns text for step 01, dict for JSON steps."""
+        template = self._load_template(prompt_name)
+        filled = self._fill_template(template, {k: str(v) for k, v in variables.items()})
+        json_mode = prompt_name in JSON_PROMPTS
+        content = self._call_model(filled, json_mode=json_mode)
+
+        if not json_mode:
+            return content
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Invalid JSON from prompt {prompt_name}: {content[:200]}"
+            ) from exc
