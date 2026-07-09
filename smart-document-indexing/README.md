@@ -2,6 +2,8 @@
 
 MEDFAR take-home prototype: a Python pipeline that processes clinical PDF/fax documents and produces structured JSON for MYLE document indexing.
 
+**Design write-up:** [DESIGN.md](DESIGN.md) · **Roadmap:** [ROADMAP.md](ROADMAP.md) · **Example outputs:** [examples/](examples/)
+
 ## Quick start
 
 **Requirements:** Python 3.10+ (stable), OpenAI API key
@@ -48,6 +50,35 @@ Batch evaluation across all sample PDFs:
 ```bash
 .\.venv\Scripts\python eval/run_eval.py
 ```
+
+## Submission results
+
+Batch eval on all 6 sample PDFs (`gpt-4o`, 2026-07-09). Full report: `eval/batch_report.json`.
+
+| Document | Status | Classification | Gold match |
+|----------|--------|----------------|------------|
+| Appointment notice | pass_with_review | Other / Patient Services | Yes |
+| Consultation report | pass_with_review | Clinical Note / Specialist | Yes |
+| Imaging | pass_with_review | Results / Imaging | Yes |
+| Prescription | pass_with_review | Requests / Other | No |
+| Referral declined | fail | Requests / Consultation Requests | No |
+| Lab result | pass_with_review | Other / Other | No |
+
+**Totals:** 0 pass · 5 pass_with_review · 1 fail · **50%** classification accuracy · **50%** review-flag accuracy
+
+Known issues and reasoning: [DESIGN.md §5](DESIGN.md#5-submission-results-batch-run).
+
+### Deliverables
+
+| Item | Location |
+|------|----------|
+| Runnable code + prompts | This repo |
+| Setup & architecture | `README.md` |
+| Design rationale, rubrics, failures | `DESIGN.md` |
+| Sample JSON (no API key) | `examples/` |
+| Batch metrics | `eval/batch_report.json` |
+
+The Cursor build prompt requires a **README**; `#0 Instructions` PDF was image-only and could not be parsed — confirm with MEDFAR if a separate PDF is required.
 
 ### Optional: Tesseract OCR
 
@@ -103,7 +134,9 @@ Each document produces JSON with:
 - `blocking_errors` — deterministic failures (invalid taxonomy, hallucinated fields, LLM invalid)
 - `warnings` — non-blocking issues (low confidence, placeholder physicians, evidence mismatches)
 - `validation_notes` — supplementary LLM review notes
-- `source_evidence` — clues used for classification
+- `source_evidence` — clues used for classification (`patient_identifier_clues`, `clinical_content_clues`, etc.)
+
+**Taxonomy:** `Summary` includes `Record Summary Request` (single subclass per MYLE spec; not separate `Record Summary` + `Request`).
 
 ## How ambiguity is handled
 
@@ -155,23 +188,30 @@ The flag is set when **any** of these apply:
 - Image-only PDFs require Tesseract or GPT-4o vision fallback
 - Single class/subclass per document (mixed PDFs get one best-fit + review flag)
 
-## Roadmap (next steps)
+## Roadmap
+
+See **[ROADMAP.md](ROADMAP.md)** for the prioritized plan to move from prototype to production-ready indexing.
 
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Core pipeline | Done | 5-step chain, CLI, JSON output |
-| Mini eval labels | Next | Create `eval/labels/` from sample expectations |
-| Eval harness | Planned | Per-prompt metrics (recall, classification accuracy, review flag precision) |
+| Eval labels + batch report | Done | `eval/labels/`, `eval/run_eval.py`, Streamlit dashboard |
+| Deterministic validation | Done | `pipeline_status`, `blocking_errors`, `warnings` |
+| Prompt tuning from eval | Next | Close taxonomy/entity failure modes on 6 samples |
 | Page-level classification | Planned | Split multi-document PDFs per page |
-| Model comparison | Planned | Same prompts on GPT-4o, Gemini, Claude |
+| Production hardening | Planned | OCR benchmark, cost controls, API integration |
 | Benchmark dataset | Planned | 200+ labeled documents across MYLE classes and OCR quality tiers |
 
-### How evaluation could be added
+## Evaluation
 
-1. Add `eval/labels/{document_id}.json` with expected class, subclass, key fields, and `human_review_required`
-2. Add `eval/run_eval.py` to run the pipeline and compare outputs
-3. Track per-step metrics: evidence recall, entity field accuracy, classification top-1, validation precision
-4. Use results to A/B test prompt versions
+Implemented in `eval/`:
+
+- **Gold labels** — `eval/labels/` (6 sample PDFs)
+- **Batch report** — `eval/run_eval.py` → `eval/batch_report.json`
+- **Dashboard** — `streamlit run eval/app.py` (per-step prompt, output, KPIs)
+- **Scorer** — `eval/scorer.py` (deterministic KPIs per step)
+
+See [DESIGN.md §4](DESIGN.md#4-evaluation-rubrics-kpis) for rubrics.
 
 ## Project structure
 
@@ -183,8 +223,12 @@ smart-document-indexing/
   eval/               # Eval dashboard, scorer, gold labels
     app.py            # Streamlit UI
     run_eval.py       # Batch test report
+    batch_report.json # Latest batch metrics
     scorer.py         # Per-step KPI calculations
     labels/           # Expected outputs per sample PDF
+  examples/           # Sample outputs for reviewers (no API key)
+  DESIGN.md           # Design rationale and submission results
+  ROADMAP.md          # Next steps
   extract.py          # PDF text extraction
   schema.py           # Pydantic models + MYLE taxonomy
   llm_client.py       # OpenAI client

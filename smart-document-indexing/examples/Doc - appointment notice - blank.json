@@ -1,0 +1,85 @@
+{
+  "document_id": "Doc - appointment notice - blank",
+  "document_class": "Other",
+  "document_subclass": "Patient Services",
+  "classification_confidence": 0.85,
+  "short_description": "Appointment notice and instructions for plastic surgery consultation.",
+  "patient_identifiers": {
+    "name": null,
+    "date_of_birth": "November 11, 1966",
+    "health_card_number": "9736 050 309",
+    "mrn": null,
+    "phone": "(778) 855-2360",
+    "address": null,
+    "other": [
+      "{\"type\": \"sex\", \"value\": \"Female\"}",
+      "{\"type\": \"age\", \"value\": \"59\"}"
+    ]
+  },
+  "physicians": [
+    {
+      "name": "Dr. Ross C. Horton",
+      "role": "unknown",
+      "confidence": 0.9,
+      "evidence": "Dr. Ross C. Horton, Inc. Cosmetic and Plastic Surgery, www.doctorrosshorton.com"
+    }
+  ],
+  "routing_support_text": "This document is an appointment notice for a cosmetic and plastic surgery consultation, including instructions for the patient.",
+  "ambiguities": [
+    "Document may contain multiple document types across pages",
+    "Patient address is not provided in the document.",
+    "Patient name is not provided in the document."
+  ],
+  "human_review_required": true,
+  "pipeline_status": "pass_with_review",
+  "blocking_errors": [],
+  "warnings": [
+    "LLM note: The ambiguities flagged are reasonable, specifically the absence of the patient's name and address, which are typically found in such documents.",
+    "LLM note: The classification of 'Other' with subclass 'Patient Services' seems appropriate given the content is an appointment notice for a cosmetic and plastic surgery consultation.",
+    "LLM note: The routing_support_text correctly identifies the nature of the document as an appointment notice.",
+    "LLM note: The short_description accurately captures the main purpose of the document, which is about providing appointment details and instructions.",
+    "LLM note: There is no high risk of hallucination or incorrect classification that necessitates human review beyond the ambiguities already highlighted."
+  ],
+  "validation_notes": [
+    "The classification of 'Other' with subclass 'Patient Services' seems appropriate given the content is an appointment notice for a cosmetic and plastic surgery consultation.",
+    "The short_description accurately captures the main purpose of the document, which is about providing appointment details and instructions.",
+    "The routing_support_text correctly identifies the nature of the document as an appointment notice.",
+    "The ambiguities flagged are reasonable, specifically the absence of the patient's name and address, which are typically found in such documents.",
+    "There is no high risk of hallucination or incorrect classification that necessitates human review beyond the ambiguities already highlighted."
+  ],
+  "source_evidence": {
+    "document_type_clues": [
+      "Appointment Notice",
+      "referral",
+      "consultation",
+      "consultation ONLY",
+      "appointment for your patient",
+      "Appt.: Apr 29, 2026 at 10:45 AM",
+      "cosmetic",
+      "Plastic Surgery",
+      "Appointment Notice",
+      "PLEXIA Electronic Medical Systems Inc."
+    ],
+    "patient_identifier_clues": [
+      "age: 59",
+      "sex: Female",
+      "date of birth: November 11, 1966",
+      "home phone: (778) 855-2360",
+      "PHN: 9736 050 309"
+    ],
+    "clinical_content_clues": [],
+    "physician_clues": [
+      "Dr. Ross C. Horton, Inc."
+    ],
+    "classification_clues": [
+      "referral",
+      "referral request",
+      "list of medications taken",
+      "Appt.: Apr 29, 2026 at 10:45 AM",
+      "confirmed",
+      "do not need to call the office to confirm",
+      "contact the office",
+      "appointment time within 1 week"
+    ]
+  }
+}

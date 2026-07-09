@@ -1,0 +1,146 @@
+{
+  "total_documents": 6,
+  "passed": 0,
+  "passed_with_human_review": 5,
+  "failed": 1,
+  "classification_accuracy": 50.0,
+  "review_flag_accuracy": 50.0,
+  "accuracy_by_expected_class": {
+    "Clinical Note / Specialist": 100.0,
+    "Medication and Prescriptions / Prescription Form": 0.0,
+    "Other / Other": 0.0,
+    "Other / Patient Services": 100.0,
+    "Results / Imaging": 100.0,
+    "Results / Laboratory": 0.0
+  },
+  "documents": [
+    {
+      "document_id": "Doc - appointment notice - blank",
+      "pipeline_status": "pass_with_review",
+      "human_review_required": true,
+      "document_class": "Other",
+      "document_subclass": "Patient Services",
+      "classification_confidence": 0.85,
+      "classification_correct": true,
+      "review_flag_correct": false,
+      "blocking_errors": [],
+      "warnings": [
+        "LLM note: The ambiguities flagged are reasonable, specifically the absence of the patient's name and address, which are typically found in such documents.",
+        "LLM note: The classification of 'Other' with subclass 'Patient Services' seems appropriate given the content is an appointment notice for a cosmetic and plastic surgery consultation.",
+        "LLM note: The routing_support_text correctly identifies the nature of the document as an appointment notice.",
+        "LLM note: The short_description accurately captures the main purpose of the document, which is about providing appointment details and instructions.",
+        "LLM note: There is no high risk of hallucination or incorrect classification that necessitates human review beyond the ambiguities already highlighted."
+      ],
+      "expected_class": "Other",
+      "expected_subclass": "Patient Services"
+    },
+    {
+      "document_id": "Doc - consultation report - blank",
+      "pipeline_status": "pass_with_review",
+      "human_review_required": true,
+      "document_class": "Clinical Note",
+      "document_subclass": "Specialist",
+      "classification_confidence": 0.85,
+      "classification_correct": true,
+      "review_flag_correct": false,
+      "blocking_errors": [],
+      "warnings": [
+        "Evidence clue not found in source text: 'bleeding, grown'",
+        "Evidence clue not found in source text: 'cryotherapy applied today'",
+        "LLM note: Ambiguity noted about 'multiple document types across pages' is reasonable given the report's structure but does not compromise the document's classification as a clinical note.",
+        "LLM note: The classification as a 'Clinical Note' under the 'Specialist' subclass is appropriate given the document's purpose as a detailed report from a dermatologist regarding patient observations, treatment, and follow-up.",
+        "LLM note: The routing_support_text directing the document to the dermatology department for review and potential follow-up is correct and appropriately aligned with the document's content.",
+        "LLM note: The short_description accurately captures the essence of the document as it focuses on patient findings, treatment, and the plan for follow-up by the dermatologist."
+      ],
+      "expected_class": "Clinical Note",
+      "expected_subclass": "Specialist"
+    },
+    {
+      "document_id": "Doc - imaging - blank",
+      "pipeline_status": "pass_with_review",
+      "human_review_required": false,
+      "document_class": "Results",
+      "document_subclass": "Imaging",
+      "classification_confidence": 0.9,
+      "classification_correct": true,
+      "review_flag_correct": true,
+      "blocking_errors": [],
+      "warnings": [
+        "LLM note: Ambiguities related to patient information and the lack of a physician's name are appropriately flagged.",
+        "LLM note: The classification as 'Results' and 'Imaging' matches the document's purpose as an ultrasound report with findings related to hepatic cirrhosis and portal hypertension.",
+        "LLM note: The routing_support_text also correctly identifies the report focuses on findings concerning the liver, spleen, gallbladder, and kidneys.",
+        "LLM note: The short_description accurately summarizes the main focus of the document, reflecting its content without hallucinations.",
+        "LLM note: There are no major classification risks identified that would necessitate human review in this case."
+      ],
+      "expected_class": "Results",
+      "expected_subclass": "Imaging"
+    },
+    {
+      "document_id": "Doc - prescription - blank",
+      "pipeline_status": "pass_with_review",
+      "human_review_required": false,
+      "document_class": "Requests",
+      "document_subclass": "Other",
+      "classification_confidence": 0.8,
+      "classification_correct": false,
+      "review_flag_correct": true,
+      "blocking_errors": [],
+      "warnings": [
+        "Evidence clue not found in source text: 'TAKE 1 CAPSULE BY MOUTH ONCE DAILY EVERY MORNING'",
+        "LLM note: Ambiguities concerning missing patient and prescriber information are noted correctly, and the need for them to be flagged makes sense.",
+        "LLM note: The document classification as 'Requests' with subclass 'Other' is appropriate as it is primarily a reauthorization request, not a direct prescription.",
+        "LLM note: The routing_support_text correctly identifies the document's purpose and structure without any signs of hallucination.",
+        "LLM note: The short_description accurately describes the document as a 'Prescription refill reauthorization request document.'",
+        "LLM recommended change: Consider adding a direct reference to the purpose of reauthorization in the classification, such as 'Reauthorization Request', to improve clarity.",
+        "LLM recommended change: Ensure the alternative classification suggestion ('Medication and Prescriptions') is reviewed to ensure it doesn't create unnecessary confusion for similar documents."
+      ],
+      "expected_class": "Medication and Prescriptions",
+      "expected_subclass": "Prescription Form"
+    },
+    {
+      "document_id": "Doc - referral declined - blank",
+      "pipeline_status": "fail",
+      "human_review_required": true,
+      "document_class": "Requests",
+      "document_subclass": "Consultation Requests",
+      "classification_confidence": 0.7,
+      "classification_correct": false,
+      "review_flag_correct": true,
+      "blocking_errors": [
+        "Patient field 'name' not found in source text (possible hallucination): 'Hamdan Barahmeh'"
+      ],
+      "warnings": [
+        "Evidence clue not found in source text: 'Ferritin (mcg/L) 4'",
+        "Evidence clue not found in source text: 'Hgb (g/L) 117'",
+        "LLM note: Ambiguities are reasonably flagged, such as the potential alternative classification focusing on the prescription form, indicating multiple document types across pages.",
+        "LLM note: The document classification of \"Requests\" with a subclass of \"Consultation Requests\" seems appropriate given the purpose of the document, which is a referral that has been declined due to missing information.",
+        "LLM note: The routing_support_text is not hallucinated; it accurately describes that further action is needed due to the incomplete consultation request.",
+        "LLM note: The short_description is accurate as it summarizes the content of the document, covering both the consultation request rejection and the parenteral iron prescription form.",
+        "LLM note: There are no additional classification risks that warrant human review, as the key elements of the document have been captured and categorized appropriately."
+      ],
+      "expected_class": "Other",
+      "expected_subclass": "Other"
+    },
+    {
+      "document_id": "Doc - Résultat - Laboratoire - fillable",
+      "pipeline_status": "pass_with_review",
+      "human_review_required": true,
+      "document_class": "Other",
+      "document_subclass": "Other",
+      "classification_confidence": 0.2,
+      "classification_correct": false,
+      "review_flag_correct": false,
+      "blocking_errors": [],
+      "warnings": [
+        "Classification confidence below threshold (0.20 < 0.6)",
+        "LLM note: Ambiguities noted regarding missing information such as MRN and address are reasonable given the document content.",
+        "LLM note: Routing support text is consistent with the document's repetitive nature and lack of additional content.",
+        "LLM note: The classification as 'Other' appears appropriate given the lack of clinical content in the document.",
+        "LLM note: The document's purpose is unclear and does not directly align with typical 'Laboratory Results' or other specific document purposes.",
+        "LLM note: The short_description accurately reflects the content as mostly patient information without clear intent."
+      ],
+      "expected_class": "Results",
+      "expected_subclass": "Laboratory"
+    }
+  ]
+}

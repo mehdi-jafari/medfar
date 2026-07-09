@@ -80,6 +80,34 @@ def _step_from_llm(step_number: int, llm_result: LLMStepResult) -> PipelineStepR
     )
 
 
+def _normalize_other(values: Any) -> list[str]:
+    if not values:
+        return []
+    items = values if isinstance(values, list) else [values]
+    normalized: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        if isinstance(item, dict):
+            normalized.append(json.dumps(item, ensure_ascii=False))
+        else:
+            normalized.append(str(item))
+    return normalized
+
+
+def _coerce_patient_field(value: Any) -> tuple[str | None, list[str]]:
+    """Normalize LLM patient field values; lists go to primary + other."""
+    if value is None:
+        return None, []
+    if isinstance(value, list):
+        items = [str(v).strip() for v in value if v]
+        if not items:
+            return None, []
+        return items[0], items[1:]
+    text = str(value).strip()
+    return (text or None), []
+
+
 def merge(
     classification: dict[str, Any],
     entities: dict[str, Any],
@@ -88,14 +116,18 @@ def merge(
 ) -> tuple[PipelineOutput, list[str]]:
     """Combine step outputs into final pipeline JSON. Returns (output, pre-validation warnings)."""
     patient_raw = entities.get("patient_identifiers", {})
+    phone, phone_extra = _coerce_patient_field(patient_raw.get("phone"))
+    other = _normalize_other(patient_raw.get("other"))
+    other.extend(phone_extra)
+
     patient = PatientIdentifiers(
         name=patient_raw.get("name"),
         date_of_birth=patient_raw.get("date_of_birth"),
         health_card_number=patient_raw.get("health_card_number"),
         mrn=patient_raw.get("mrn"),
-        phone=patient_raw.get("phone"),
+        phone=phone,
         address=patient_raw.get("address"),
-        other=patient_raw.get("other") or [],
+        other=other,
     )
 
     ambiguities: list[str] = []

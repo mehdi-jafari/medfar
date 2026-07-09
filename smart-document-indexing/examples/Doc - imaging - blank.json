@@ -1,0 +1,73 @@
+{
+  "document_id": "Doc - imaging - blank",
+  "document_class": "Results",
+  "document_subclass": "Imaging",
+  "classification_confidence": 0.9,
+  "short_description": "Abdominal ultrasound report detailing findings related to hepatic cirrhosis and portal hypertension.",
+  "patient_identifiers": {
+    "name": null,
+    "date_of_birth": null,
+    "health_card_number": null,
+    "mrn": null,
+    "phone": null,
+    "address": null,
+    "other": []
+  },
+  "physicians": [],
+  "routing_support_text": "Imaging report with findings on liver, spleen, gallbladder, and kidneys.",
+  "ambiguities": [
+    "Patient information is blank or de-identified.",
+    "Physician role 'Reading Physician' is mentioned without an actual name."
+  ],
+  "human_review_required": false,
+  "pipeline_status": "pass_with_review",
+  "blocking_errors": [],
+  "warnings": [
+    "LLM note: Ambiguities related to patient information and the lack of a physician's name are appropriately flagged.",
+    "LLM note: The classification as 'Results' and 'Imaging' matches the document's purpose as an ultrasound report with findings related to hepatic cirrhosis and portal hypertension.",
+    "LLM note: The routing_support_text also correctly identifies the report focuses on findings concerning the liver, spleen, gallbladder, and kidneys.",
+    "LLM note: The short_description accurately summarizes the main focus of the document, reflecting its content without hallucinations.",
+    "LLM note: There are no major classification risks identified that would necessitate human review in this case."
+  ],
+  "validation_notes": [
+    "The classification as 'Results' and 'Imaging' matches the document's purpose as an ultrasound report with findings related to hepatic cirrhosis and portal hypertension.",
+    "The short_description accurately summarizes the main focus of the document, reflecting its content without hallucinations.",
+    "The routing_support_text also correctly identifies the report focuses on findings concerning the liver, spleen, gallbladder, and kidneys.",
+    "Ambiguities related to patient information and the lack of a physician's name are appropriately flagged.",
+    "There are no major classification risks identified that would necessitate human review in this case."
+  ],
+  "source_evidence": {
+    "document_type_clues": [
+      "Ultrasound: Abdomen",
+      "FINDINGS:",
+      "IMPRESSION:"
+    ],
+    "patient_identifier_clues": [],
+    "clinical_content_clues": [
+      "History of cirrhosis and Budd-Chiari",
+      "liver is nodular in contour with a heterogenous echotexture",
+      "No suspicious hepatic mass",
+      "No biliary obstruction",
+      "portal vein is patent with normal direction of flow",
+      "Reversal of flow is noted in the left portal vein",
+      "spleen is enlarged measuring 15 cm with renal splenic varices",
+      "gallbladder is not well visualized due to bowel gas shadowing",
+      "gallbladder is edematous measuring 4 mm",
+      "No gallstones",
+      "right kidney measures 12.1 cm",
+      "left kidney measures 10.6 cm in bipolar length",
+      "Both are unremarkable in outline and echotexture",
+      "Moderate volume abdominopelvic ascites",
+      "Hepatic cirrhosis with portal hypertension",
+      "Hepatofugal flow is noted in the left portal vein",
+      "Moderate volume ascites"
+    ],
+    "physician_clues": [
+      "Reading Physician"
+    ],
+    "classification_clues": [
+      "Accession#",
+      "Location: Coquitlam"
+    ]
+  }
+}
