@@ -81,12 +81,34 @@
 | Area | Action |
 |------|--------|
 | **OCR** | Benchmark pymupdf vs Tesseract vs vision per document type; cache raw text; only call vision when character yield is below threshold |
-| **Cost / latency** | Log tokens per step; explore cheaper model for steps 1–2; keep stronger model for classification + validation |
+| **Per-step model routing** | Benchmark API models (e.g. gpt-4o, gpt-4o-mini) and local/OSS models (e.g. Llama/Mistral via Ollama) **per pipeline step** using `eval/run_eval.py`; select cheapest model per step that meets KPI floors |
+| **Cost / latency** | Log tokens, cost, and latency per step; extend `llm_client.py` with `model_for_step(prompt_name)` |
 | **Integration** | Thin REST or queue worker: `POST /index` → PDF in, JSON out; persist `pipeline_status` for downstream routing |
 | **Bilingual** | Explicit French/English handling in OCR cleanup and evidence prompts (RAMQ, CSST, bilingual lab headers) |
 | **Benchmark scale** | Grow from 6 → 50 → 200 labeled documents across MYLE classes and OCR quality tiers |
 
-**Done when:** Pipeline runs in batch on a folder with predictable cost per doc, stable OCR on scanned labs and image-only prescriptions, and a clear integration contract for MYLE.
+### Per-step model routing (eval-gated)
+
+The prototype uses **one model** (`gpt-4o`) for all LLM steps. Production should assign models per step based on measured precision vs cost.
+
+| Step | Risk if wrong | Initial hypothesis |
+|------|---------------|------------------|
+| 1 OCR cleanup | Medium — fact corruption | Cheaper API or local model OK if key fields preserved |
+| 2 Evidence | Medium — affects classification | Cheaper model; validate clues against source text |
+| 3 Entities | **High** — hallucination | Keep strongest model until eval proves otherwise |
+| 4 Classification | **Highest** — wrong routing | Keep strongest model (gpt-4o or equivalent) |
+| 5 Validation | Low — supplementary | Cheaper model or rely more on `validators.py` |
+
+**Comparison approach:**
+
+1. Run each step across candidate models on the labeled sample set (extend `eval/run_eval.py` or add `eval/compare_models.py`).
+2. Record per-step KPIs (from `eval/scorer.py`), tokens, estimated cost, and latency.
+3. Apply **KPI floors** before downgrading — e.g. zero hallucinated patient fields on step 3; ≥85% taxonomy accuracy on step 4; ≥80% evidence recall on step 2.
+4. Document the chosen model per step in config (e.g. `models.yaml`).
+
+**Open-source / offline:** Evaluate local models for steps 1–2 first. Keep cloud models for steps 3–4 until parity is proven. Tesseract remains the offline OCR path for step 0 (non-LLM).
+
+**Done when:** Pipeline runs in batch on a folder with predictable cost per doc, stable OCR on scanned labs and image-only prescriptions, a clear integration contract for MYLE, and eval-gated per-step model assignments.
 
 ---
 

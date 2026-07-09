@@ -227,8 +227,14 @@ Mapped in `schema.py` per assignment taxonomy. Notable: `Summary` includes **Rec
 - Six samples only; not production-ready OCR
 - Single class per PDF; mixed documents flagged not split
 - English/French mixed content without dedicated bilingual handling
-- 5 LLM calls per document — cost and latency
+- 5 LLM calls per document — cost and latency; **single model (`gpt-4o`) for all steps** in this prototype
 - Assignment time box (3–4 hours) — depth over exhaustive coverage
+
+## Future work (see ROADMAP.md)
+
+- **Per-step model routing:** Benchmark API models (gpt-4o, gpt-4o-mini) and open-source/local models (e.g. Llama/Mistral via Ollama) per pipeline step using the eval harness. Choose the cheapest model per step that meets KPI floors (e.g. no hallucinated entities on step 3, ≥85% taxonomy accuracy on step 4). Keep the strongest model on entity extraction and classification until eval proves a cheaper alternative is safe.
+- Page-level segmentation for mixed PDFs
+- Scale labeled benchmark dataset (6 → 200+ documents)
 
 ---
 

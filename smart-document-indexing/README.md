@@ -203,7 +203,8 @@ See **[ROADMAP.md](ROADMAP.md)** for the prioritized plan to move from prototype
 | Deterministic validation | Done | `pipeline_status`, `blocking_errors`, `warnings` |
 | Prompt tuning from eval | Next | Close taxonomy/entity failure modes on 6 samples |
 | Page-level classification | Planned | Split multi-document PDFs per page |
-| Production hardening | Planned | OCR benchmark, cost controls, API integration |
+| Production hardening | Planned | OCR benchmark, per-step model routing, cost controls, API integration |
+| Per-step model comparison | Planned | Eval-gated API + OSS model selection per pipeline step |
 | Benchmark dataset | Planned | 200+ labeled documents across MYLE classes and OCR quality tiers |
 
 ## Evaluation
