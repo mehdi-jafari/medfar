@@ -1,0 +1,11 @@
+{
+  "document_id": "Doc - referral declined - blank",
+  "expected_class": "Other",
+  "expected_subclass": "Other",
+  "acceptable_classifications": [],
+  "human_review_required": true,
+  "patient_identifiers": {},
+  "physicians": [],
+  "evidence_must_include": ["declined", "referral"],
+  "key_fields_raw": []
+}

@@ -1,0 +1,17 @@
+{
+  "document_id": "Doc - appointment notice - blank",
+  "expected_class": "Other",
+  "expected_subclass": "Patient Services",
+  "acceptable_classifications": [],
+  "human_review_required": false,
+  "patient_identifiers": {
+    "date_of_birth": "November 11, 1966",
+    "health_card_number": "9736 050 309",
+    "phone": "778"
+  },
+  "physicians": [
+    {"name_substring": "Horton", "role": "author"}
+  ],
+  "evidence_must_include": ["appointment", "consultation", "referral"],
+  "key_fields_raw": ["9736 050 309", "November 11, 1966", "Apr 29"]
+}

@@ -6,6 +6,8 @@ import json
 import logging
 import os
 import re
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,17 @@ JSON_PROMPTS = {
     "04_taxonomy_classification",
     "05_validation",
 }
+
+
+@dataclass
+class LLMStepResult:
+    """Result of a single LLM prompt execution."""
+
+    prompt_name: str
+    filled_prompt: str
+    output: str | dict[str, Any]
+    tokens_used: int
+    latency_s: float
 
 
 class LLMClient:
@@ -76,19 +89,39 @@ class LLMClient:
             raise ValueError("Empty response from model")
         return content.strip()
 
-    def run(self, prompt_name: str, **variables: str) -> str | dict[str, Any]:
-        """Run a named prompt. Returns text for step 01, dict for JSON steps."""
+    def prepare_prompt(self, prompt_name: str, **variables: str) -> str:
+        """Load and fill a prompt template without calling the model."""
         template = self._load_template(prompt_name)
-        filled = self._fill_template(template, {k: str(v) for k, v in variables.items()})
+        return self._fill_template(template, {k: str(v) for k, v in variables.items()})
+
+    def run_detailed(self, prompt_name: str, **variables: str) -> LLMStepResult:
+        """Run a named prompt and return prompt text, output, and usage metadata."""
+        filled = self.prepare_prompt(prompt_name, **variables)
         json_mode = prompt_name in JSON_PROMPTS
+        tokens_before = self.total_tokens
+        started = time.perf_counter()
         content = self._call_model(filled, json_mode=json_mode)
+        latency_s = time.perf_counter() - started
+        tokens_used = self.total_tokens - tokens_before
 
         if not json_mode:
-            return content
+            output: str | dict[str, Any] = content
+        else:
+            try:
+                output = json.loads(content)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Invalid JSON from prompt {prompt_name}: {content[:200]}"
+                ) from exc
 
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Invalid JSON from prompt {prompt_name}: {content[:200]}"
-            ) from exc
+        return LLMStepResult(
+            prompt_name=prompt_name,
+            filled_prompt=filled,
+            output=output,
+            tokens_used=tokens_used,
+            latency_s=latency_s,
+        )
+
+    def run(self, prompt_name: str, **variables: str) -> str | dict[str, Any]:
+        """Run a named prompt. Returns text for step 01, dict for JSON steps."""
+        return self.run_detailed(prompt_name, **variables).output

@@ -1,0 +1,11 @@
+{
+  "document_id": "Doc - prescription - blank",
+  "expected_class": "Medication and Prescriptions",
+  "expected_subclass": "Prescription Form",
+  "acceptable_classifications": [],
+  "human_review_required": false,
+  "patient_identifiers": {},
+  "physicians": [],
+  "evidence_must_include": ["prescription", "medication"],
+  "key_fields_raw": []
+}

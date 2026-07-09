@@ -4,3 +4,5 @@ venv/
 __pycache__/
 *.pyc
 outputs/*.json
+external-sources/#0 Instructions - Take Home Assignment.pdf
+external-sources/Smart Document Indexing – Cursor Build Prompt.pdf

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from extract import extract_text
-from llm_client import LLMClient
+from llm_client import LLMClient, LLMStepResult
 from schema import (
     MYLE_TAXONOMY,
     PatientIdentifiers,
@@ -32,6 +33,52 @@ MIXED_DOC_KEYWORDS = (
     "referral declined",
     "parenteral iron",
 )
+
+STEP_TITLES = {
+    "01_ocr_cleanup": "Step 1 — OCR Cleanup",
+    "02_evidence_extraction": "Step 2 — Evidence Extraction",
+    "03_entity_extraction": "Step 3 — Entity Extraction",
+    "04_taxonomy_classification": "Step 4 — Taxonomy Classification",
+    "05_validation": "Step 5 — Validation",
+}
+
+
+@dataclass
+class PipelineStepResult:
+    """One LLM pipeline step with display metadata."""
+
+    step_number: int
+    prompt_name: str
+    title: str
+    filled_prompt: str
+    output: str | dict[str, Any]
+    tokens_used: int
+    latency_s: float
+
+
+@dataclass
+class PipelineRunResult:
+    """Full pipeline run including intermediate step outputs."""
+
+    document_id: str
+    document_path: str
+    raw_text: str
+    steps: list[PipelineStepResult] = field(default_factory=list)
+    final_output: PipelineOutput | None = None
+    total_tokens: int = 0
+    total_latency_s: float = 0.0
+
+
+def _step_from_llm(step_number: int, llm_result: LLMStepResult) -> PipelineStepResult:
+    return PipelineStepResult(
+        step_number=step_number,
+        prompt_name=llm_result.prompt_name,
+        title=STEP_TITLES.get(llm_result.prompt_name, llm_result.prompt_name),
+        filled_prompt=llm_result.filled_prompt,
+        output=llm_result.output,
+        tokens_used=llm_result.tokens_used,
+        latency_s=llm_result.latency_s,
+    )
 
 
 def _parse_physicians(raw_physicians: list[dict[str, Any]]) -> list[Physician]:
@@ -137,51 +184,9 @@ def merge(
     )
 
 
-def run_pipeline(file_path: str | Path, llm: LLMClient | None = None) -> PipelineOutput:
-    """Run the full indexing pipeline on a single PDF."""
-    path = Path(file_path)
-    client = llm or LLMClient()
-    document_id = path.stem
-
-    logger.info("Extracting text from %s", path.name)
-    raw_text = extract_text(path)
-
-    logger.info("Step 1: OCR cleanup")
-    cleaned = client.run("01_ocr_cleanup", raw_ocr_text=raw_text)
-    if not isinstance(cleaned, str):
-        raise TypeError("OCR cleanup step must return text")
-
-    logger.info("Step 2: Evidence extraction")
-    evidence = client.run("02_evidence_extraction", cleaned_document_text=cleaned)
-    if not isinstance(evidence, dict):
-        raise TypeError("Evidence extraction must return JSON")
-
-    logger.info("Step 3: Entity extraction")
-    entities = client.run("03_entity_extraction", cleaned_document_text=cleaned)
-    if not isinstance(entities, dict):
-        raise TypeError("Entity extraction must return JSON")
-
-    logger.info("Step 4: Taxonomy classification")
-    classification = client.run(
-        "04_taxonomy_classification",
-        cleaned_document_text=cleaned,
-        evidence_json=json.dumps(evidence, ensure_ascii=False),
-        taxonomy=json.dumps(MYLE_TAXONOMY, ensure_ascii=False),
-    )
-    if not isinstance(classification, dict):
-        raise TypeError("Classification must return JSON")
-
-    final_output = merge(classification, entities, evidence, document_id=document_id)
-
-    logger.info("Step 5: Validation")
-    validation = client.run(
-        "05_validation",
-        cleaned_document_text=cleaned,
-        pipeline_output_json=final_output.model_dump_json(),
-    )
-    if not isinstance(validation, dict):
-        raise TypeError("Validation must return JSON")
-
+def _apply_validation(
+    final_output: PipelineOutput, validation: dict[str, Any]
+) -> PipelineOutput:
     final_output.validation_notes = list(validation.get("validation_notes") or [])
     recommended = validation.get("recommended_changes") or []
     for note in recommended:
@@ -195,6 +200,91 @@ def run_pipeline(file_path: str | Path, llm: LLMClient | None = None) -> Pipelin
         final_output.validation_notes.append("Validation flagged output as invalid")
 
     return final_output
+
+
+def run_pipeline_detailed(
+    file_path: str | Path, llm: LLMClient | None = None
+) -> PipelineRunResult:
+    """Run the full pipeline and return intermediate step outputs."""
+    path = Path(file_path)
+    client = llm or LLMClient()
+    document_id = path.stem
+    tokens_before = client.total_tokens
+    started_steps: list[PipelineStepResult] = []
+
+    logger.info("Extracting text from %s", path.name)
+    raw_text = extract_text(path)
+
+    logger.info("Step 1: OCR cleanup")
+    step1 = client.run_detailed("01_ocr_cleanup", raw_ocr_text=raw_text)
+    started_steps.append(_step_from_llm(1, step1))
+    cleaned = step1.output
+    if not isinstance(cleaned, str):
+        raise TypeError("OCR cleanup step must return text")
+
+    logger.info("Step 2: Evidence extraction")
+    step2 = client.run_detailed(
+        "02_evidence_extraction", cleaned_document_text=cleaned
+    )
+    started_steps.append(_step_from_llm(2, step2))
+    evidence = step2.output
+    if not isinstance(evidence, dict):
+        raise TypeError("Evidence extraction must return JSON")
+
+    logger.info("Step 3: Entity extraction")
+    step3 = client.run_detailed(
+        "03_entity_extraction", cleaned_document_text=cleaned
+    )
+    started_steps.append(_step_from_llm(3, step3))
+    entities = step3.output
+    if not isinstance(entities, dict):
+        raise TypeError("Entity extraction must return JSON")
+
+    logger.info("Step 4: Taxonomy classification")
+    step4 = client.run_detailed(
+        "04_taxonomy_classification",
+        cleaned_document_text=cleaned,
+        evidence_json=json.dumps(evidence, ensure_ascii=False),
+        taxonomy=json.dumps(MYLE_TAXONOMY, ensure_ascii=False),
+    )
+    started_steps.append(_step_from_llm(4, step4))
+    classification = step4.output
+    if not isinstance(classification, dict):
+        raise TypeError("Classification must return JSON")
+
+    final_output = merge(classification, entities, evidence, document_id=document_id)
+
+    logger.info("Step 5: Validation")
+    step5 = client.run_detailed(
+        "05_validation",
+        cleaned_document_text=cleaned,
+        pipeline_output_json=final_output.model_dump_json(),
+    )
+    started_steps.append(_step_from_llm(5, step5))
+    validation = step5.output
+    if not isinstance(validation, dict):
+        raise TypeError("Validation must return JSON")
+
+    final_output = _apply_validation(final_output, validation)
+    total_latency = sum(step.latency_s for step in started_steps)
+
+    return PipelineRunResult(
+        document_id=document_id,
+        document_path=str(path),
+        raw_text=raw_text,
+        steps=started_steps,
+        final_output=final_output,
+        total_tokens=client.total_tokens - tokens_before,
+        total_latency_s=total_latency,
+    )
+
+
+def run_pipeline(file_path: str | Path, llm: LLMClient | None = None) -> PipelineOutput:
+    """Run the full indexing pipeline on a single PDF."""
+    result = run_pipeline_detailed(file_path, llm=llm)
+    if result.final_output is None:
+        raise RuntimeError("Pipeline completed without final output")
+    return result.final_output
 
 
 def save_output(output: PipelineOutput, outputs_dir: str | Path) -> Path:

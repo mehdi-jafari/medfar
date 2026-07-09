@@ -1,0 +1,11 @@
+{
+  "document_id": "Doc - Résultat - Laboratoire - fillable",
+  "expected_class": "Results",
+  "expected_subclass": "Laboratory",
+  "acceptable_classifications": [],
+  "human_review_required": false,
+  "patient_identifiers": {},
+  "physicians": [],
+  "evidence_must_include": ["laboratoire", "result"],
+  "key_fields_raw": []
+}

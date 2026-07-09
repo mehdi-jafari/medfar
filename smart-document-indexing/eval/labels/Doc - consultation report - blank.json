@@ -1,0 +1,16 @@
+{
+  "document_id": "Doc - consultation report - blank",
+  "expected_class": "Clinical Note",
+  "expected_subclass": "Specialist",
+  "acceptable_classifications": [
+    {
+      "document_class": "Consultation Reports",
+      "document_subclass": "Specialist"
+    }
+  ],
+  "human_review_required": false,
+  "patient_identifiers": {},
+  "physicians": [],
+  "evidence_must_include": ["consultation", "specialist"],
+  "key_fields_raw": []
+}

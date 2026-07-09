@@ -1,0 +1,11 @@
+{
+  "document_id": "Doc - imaging - blank",
+  "expected_class": "Results",
+  "expected_subclass": "Imaging",
+  "acceptable_classifications": [],
+  "human_review_required": false,
+  "patient_identifiers": {},
+  "physicians": [],
+  "evidence_must_include": ["imaging", "radiology"],
+  "key_fields_raw": []
+}

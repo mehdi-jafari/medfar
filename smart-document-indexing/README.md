@@ -28,6 +28,21 @@ Run on all sample documents:
 
 Outputs are written to `outputs/{document_name}.json`.
 
+### Eval dashboard
+
+Inspect each pipeline step (prompt, model output, KPIs) in a browser UI:
+
+```bash
+.\.venv\Scripts\streamlit run eval/app.py
+```
+
+Use the sidebar to pick a document, then click through each step in the UI:
+1. **Extract PDF text** (local, no API)
+2. **Run step 1–5** one at a time — prompt preview, output, and KPIs appear in the browser after each step
+3. Or use **Run all remaining steps** in the sidebar to finish in one go
+
+Gold labels live in `eval/labels/`.
+
 ### Optional: Tesseract OCR
 
 For image-only PDFs (e.g. prescription form), install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) and add it to your PATH. If Tesseract is unavailable, the pipeline falls back to GPT-4o vision transcription (uses additional API calls).
@@ -156,6 +171,10 @@ smart-document-indexing/
   documents/          # Sample PDFs
   prompts/            # 01–05 markdown prompt templates
   outputs/            # Generated JSON (gitignored)
+  eval/               # Eval dashboard, scorer, gold labels
+    app.py            # Streamlit UI
+    scorer.py         # Per-step KPI calculations
+    labels/           # Expected outputs per sample PDF
   extract.py          # PDF text extraction
   schema.py           # Pydantic models + MYLE taxonomy
   llm_client.py       # OpenAI client
