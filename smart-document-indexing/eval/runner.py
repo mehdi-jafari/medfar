@@ -40,6 +40,7 @@ class InteractivePipelineState:
     entities: dict[str, Any] | None = None
     classification: dict[str, Any] | None = None
     final_output: PipelineOutput | None = None
+    pending_warnings: list[str] = field(default_factory=list)
     steps: list[PipelineStepResult] = field(default_factory=list)
     completed_through: int = -1
     total_tokens: int = 0
@@ -146,7 +147,7 @@ def run_step(
             state.classification = result.output
             state.steps.append(_step_from_llm(4, result))
             state.total_latency_s += result.latency_s
-            state.final_output = merge(
+            state.final_output, state.pending_warnings = merge(
                 state.classification,
                 state.entities or {},
                 state.evidence,
@@ -164,7 +165,12 @@ def run_step(
                 raise TypeError("Validation must return JSON")
             state.steps.append(_step_from_llm(5, result))
             state.total_latency_s += result.latency_s
-            state.final_output = _apply_validation(state.final_output, result.output)
+            state.final_output = _apply_validation(
+                state.final_output,
+                result.output,
+                state.cleaned,
+                pre_warnings=state.pending_warnings,
+            )
         else:
             raise ValueError(f"Unsupported step: {step_number}")
 

@@ -11,18 +11,17 @@ from typing import Any
 from extract import extract_text
 from llm_client import LLMClient, LLMStepResult
 from schema import (
+    CONFIDENCE_REVIEW_THRESHOLD,
     MYLE_TAXONOMY,
     PatientIdentifiers,
-    Physician,
-    PhysicianRole,
     PipelineOutput,
     evidence_to_source_evidence,
     is_valid_class_subclass,
 )
+from validators import finalize_output, sanitize_physicians
 
 logger = logging.getLogger(__name__)
 
-CONFIDENCE_REVIEW_THRESHOLD = 0.6
 MIXED_DOC_KEYWORDS = (
     "multiple document",
     "mixed document",
@@ -81,55 +80,13 @@ def _step_from_llm(step_number: int, llm_result: LLMStepResult) -> PipelineStepR
     )
 
 
-def _parse_physicians(raw_physicians: list[dict[str, Any]]) -> list[Physician]:
-    physicians: list[Physician] = []
-    for item in raw_physicians:
-        role_raw = str(item.get("role", "unknown")).lower().strip()
-        try:
-            role = PhysicianRole(role_raw)
-        except ValueError:
-            role = PhysicianRole.UNKNOWN
-        physicians.append(
-            Physician(
-                name=str(item.get("name", "")).strip(),
-                role=role,
-                confidence=float(item.get("confidence", 0.0) or 0.0),
-                evidence=str(item.get("evidence", "")).strip(),
-            )
-        )
-    return [p for p in physicians if p.name]
-
-
-def _looks_like_mixed_document(
-    evidence: dict[str, Any], classification: dict[str, Any]
-) -> bool:
-    """Heuristic: multiple document types in one PDF."""
-    reasoning = str(classification.get("classification_reasoning", "")).lower()
-    if any(keyword in reasoning for keyword in MIXED_DOC_KEYWORDS):
-        return True
-
-    purpose_clues = " ".join(evidence.get("document_purpose_clues", [])).lower()
-    if "declined" in purpose_clues and (
-        "medication" in purpose_clues or "form" in purpose_clues or "iron" in purpose_clues
-    ):
-        return True
-
-    admin = evidence.get("appointment_or_administrative_clues", [])
-    meds = evidence.get("medication_clues", [])
-    forms = evidence.get("form_or_report_clues", [])
-    if admin and (meds or forms):
-        return True
-
-    return bool(classification.get("human_review_required"))
-
-
 def merge(
     classification: dict[str, Any],
     entities: dict[str, Any],
     evidence: dict[str, Any],
     document_id: str,
-) -> PipelineOutput:
-    """Combine step outputs into final pipeline JSON."""
+) -> tuple[PipelineOutput, list[str]]:
+    """Combine step outputs into final pipeline JSON. Returns (output, pre-validation warnings)."""
     patient_raw = entities.get("patient_identifiers", {})
     patient = PatientIdentifiers(
         name=patient_raw.get("name"),
@@ -167,14 +124,21 @@ def merge(
             "Document may contain multiple document types across pages"
         )
 
-    return PipelineOutput(
+    physicians, physician_warnings, physician_ambiguities = sanitize_physicians(
+        entities.get("physicians") or []
+    )
+    ambiguities.extend(physician_ambiguities)
+    if physician_warnings:
+        human_review = True
+
+    output = PipelineOutput(
         document_id=document_id,
         document_class=document_class,
         document_subclass=document_subclass,
         classification_confidence=confidence,
         short_description=str(classification.get("short_description", "")).strip(),
         patient_identifiers=patient,
-        physicians=_parse_physicians(entities.get("physicians") or []),
+        physicians=physicians,
         routing_support_text=str(
             classification.get("routing_support_text", "")
         ).strip(),
@@ -182,24 +146,51 @@ def merge(
         human_review_required=human_review,
         source_evidence=evidence_to_source_evidence(evidence),
     )
+    return output, physician_warnings
 
 
 def _apply_validation(
-    final_output: PipelineOutput, validation: dict[str, Any]
+    final_output: PipelineOutput,
+    validation: dict[str, Any],
+    cleaned_text: str,
+    pre_warnings: list[str] | None = None,
 ) -> PipelineOutput:
     final_output.validation_notes = list(validation.get("validation_notes") or [])
-    recommended = validation.get("recommended_changes") or []
-    for note in recommended:
-        final_output.validation_notes.append(f"Recommended: {note}")
-
     if validation.get("human_review_required"):
         final_output.human_review_required = True
 
-    if not validation.get("is_valid", True):
-        final_output.human_review_required = True
-        final_output.validation_notes.append("Validation flagged output as invalid")
+    return finalize_output(
+        final_output,
+        cleaned_text,
+        llm_validation=validation,
+        extra_warnings=pre_warnings,
+    )
 
-    return final_output
+
+def _looks_like_mixed_document(
+    evidence: dict[str, Any], classification: dict[str, Any]
+) -> bool:
+    """Heuristic: multiple document types in one PDF."""
+    reasoning = str(classification.get("classification_reasoning", "")).lower()
+    if any(keyword in reasoning for keyword in MIXED_DOC_KEYWORDS):
+        return True
+
+    purpose_clues = " ".join(
+        (evidence.get("document_purpose_clues") or [])
+        + (evidence.get("document_type_clues") or [])
+    ).lower()
+    if "declined" in purpose_clues and (
+        "medication" in purpose_clues or "form" in purpose_clues or "iron" in purpose_clues
+    ):
+        return True
+
+    admin = evidence.get("appointment_or_administrative_clues", [])
+    meds = evidence.get("medication_clues", [])
+    forms = evidence.get("form_or_report_clues", [])
+    if admin and (meds or forms):
+        return True
+
+    return bool(classification.get("human_review_required"))
 
 
 def run_pipeline_detailed(
@@ -252,7 +243,9 @@ def run_pipeline_detailed(
     if not isinstance(classification, dict):
         raise TypeError("Classification must return JSON")
 
-    final_output = merge(classification, entities, evidence, document_id=document_id)
+    final_output, physician_warnings = merge(
+        classification, entities, evidence, document_id=document_id
+    )
 
     logger.info("Step 5: Validation")
     step5 = client.run_detailed(
@@ -265,7 +258,9 @@ def run_pipeline_detailed(
     if not isinstance(validation, dict):
         raise TypeError("Validation must return JSON")
 
-    final_output = _apply_validation(final_output, validation)
+    final_output = _apply_validation(
+        final_output, validation, cleaned, pre_warnings=physician_warnings
+    )
     total_latency = sum(step.latency_s for step in started_steps)
 
     return PipelineRunResult(

@@ -14,7 +14,7 @@ Return JSON:
   "physicians": [
     {
       "name": "",
-      "role": "author | recipient | referring | ordering | mentioned | unknown",
+      "role": "author | recipient | referring | ordering | reading | mentioned | unknown",
       "confidence": 0.0,
       "evidence": ""
     }
@@ -28,8 +28,10 @@ Rules:
 - If multiple physicians appear, include all and assign roles if possible.
 - If patient information is blank, missing, or de-identified, return null and add an ambiguity.
 - Do not infer physician identity from clinic name alone.
+- NEVER use role labels as physician names. Invalid names include: "Reading Physician", "Referring Physician", "Ordering Physician", "Attending Physician", "Doctor", "Physician".
+- If only a role label is present (e.g. "Reading Physician") with no actual person name, omit that physician from the physicians array and add an ambiguity.
 - Include evidence for each physician.
-- Use role values exactly: author, recipient, referring, ordering, mentioned, unknown.
+- Use role values exactly: author, recipient, referring, ordering, reading, mentioned, unknown.
 
 Input:
 {{cleaned_document_text}}

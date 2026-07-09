@@ -1,13 +1,12 @@
-You are validating the structured output of a clinical document indexing pipeline.
+You are performing a supplementary LLM review of a clinical document indexing pipeline output.
+
+Deterministic checks (taxonomy validity, confidence threshold, hallucination checks) are already applied in Python. Your job is to add qualitative review notes only.
 
 Check whether:
-1. The class/subclass is allowed by the MYLE taxonomy.
-2. The classification is supported by evidence in the document.
-3. Patient identifiers were extracted only when present.
-4. Physicians were extracted only when present.
-5. The description is accurate and not hallucinated.
-6. Ambiguities and missing information are clearly flagged.
-7. human_review_required is true when confidence is low or key information is ambiguous.
+1. The classification matches the document purpose (not just keywords).
+2. The short_description and routing_support_text are accurate and not hallucinated.
+3. Ambiguities and missing information are reasonably flagged.
+4. Any remaining classification risk warrants human review.
 
 Input document text:
 {{cleaned_document_text}}
@@ -22,3 +21,8 @@ Return JSON:
   "recommended_changes": [],
   "human_review_required": false
 }
+
+Rules:
+- Set is_valid to false only for serious issues (wrong document type, unsupported classification, likely hallucinated content).
+- Do not repeat deterministic checks already visible in blocking_errors or warnings.
+- Keep validation_notes concise and actionable.

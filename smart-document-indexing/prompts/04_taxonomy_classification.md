@@ -32,3 +32,11 @@ Rules:
 - Do not include patient matching.
 - routing_support_text should be a concise semantic summary useful for routing rules.
 - If multiple document types appear in one PDF (e.g. referral notice plus medication form), set human_review_required to true, lower confidence, and explain in classification_reasoning.
+
+Classification guidance:
+- Results / Laboratory or Imaging: finalized test or imaging reports with findings
+- Medication and Prescriptions / Prescription Form: prescriptions and medication forms
+- Requests / *: documents asking for a new service to be arranged (not confirmations)
+- Other / Patient Services: appointment notices, confirmations, instructions to inform the patient, administrative scheduling letters
+- A document that says "appointment is confirmed" or "inform your patient of this appointment" is NOT a Consultation Request — use Other / Patient Services
+- Consultation Reports or Clinical Note / Specialist: specialist clinical narrative or consultation report

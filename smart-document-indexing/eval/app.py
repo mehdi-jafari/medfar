@@ -268,6 +268,15 @@ def main() -> None:
     if state.is_complete:
         st.divider()
         st.header("Summary")
+        if state.final_output is not None:
+            out = state.final_output
+            status = getattr(out.pipeline_status, "value", str(out.pipeline_status))
+            st.markdown(f"**Pipeline status:** `{status}`")
+            if out.blocking_errors:
+                st.error("Blocking errors:\n" + "\n".join(f"- {e}" for e in out.blocking_errors))
+            if out.warnings:
+                st.warning("Warnings:\n" + "\n".join(f"- {w}" for w in out.warnings))
+
         step_scores = score_pipeline_run(state.to_run_result())
         summary_kpis = summary_score(step_scores, state.to_run_result())
         cols = st.columns(min(len(summary_kpis), 4))

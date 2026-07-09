@@ -43,6 +43,12 @@ Use the sidebar to pick a document, then click through each step in the UI:
 
 Gold labels live in `eval/labels/`.
 
+Batch evaluation across all sample PDFs:
+
+```bash
+.\.venv\Scripts\python eval/run_eval.py
+```
+
 ### Optional: Tesseract OCR
 
 For image-only PDFs (e.g. prescription form), install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) and add it to your PATH. If Tesseract is unavailable, the pipeline falls back to GPT-4o vision transcription (uses additional API calls).
@@ -93,7 +99,10 @@ Each document produces JSON with:
 - `routing_support_text` — concise summary for semantic routing rules
 - `ambiguities` — unclear or missing information
 - `human_review_required` — flag for manual indexing
-- `validation_notes`
+- `pipeline_status` — `pass`, `pass_with_review`, or `fail`
+- `blocking_errors` — deterministic failures (invalid taxonomy, hallucinated fields, LLM invalid)
+- `warnings` — non-blocking issues (low confidence, placeholder physicians, evidence mismatches)
+- `validation_notes` — supplementary LLM review notes
 - `source_evidence` — clues used for classification
 
 ## How ambiguity is handled
@@ -173,6 +182,7 @@ smart-document-indexing/
   outputs/            # Generated JSON (gitignored)
   eval/               # Eval dashboard, scorer, gold labels
     app.py            # Streamlit UI
+    run_eval.py       # Batch test report
     scorer.py         # Per-step KPI calculations
     labels/           # Expected outputs per sample PDF
   extract.py          # PDF text extraction

@@ -36,17 +36,20 @@ def _collect_pdf_paths(args: argparse.Namespace) -> list[Path]:
 
 def _print_summary(results: list[tuple[Path, object, int]]) -> None:
     print("\nSummary")
-    print("-" * 90)
-    print(f"{'Document':<45} {'Class/Subclass':<30} {'Conf':>5}  Review")
-    print("-" * 90)
+    print("-" * 100)
+    print(
+        f"{'Document':<40} {'Status':<18} {'Class/Subclass':<26} {'Conf':>5}  Review"
+    )
+    print("-" * 100)
     for path, output, _tokens in results:
         label = f"{output.document_class} / {output.document_subclass}"
         review = "YES" if output.human_review_required else "no"
+        status = getattr(output.pipeline_status, "value", str(output.pipeline_status))
         print(
-            f"{path.name[:44]:<45} {label[:29]:<30} "
+            f"{path.name[:39]:<40} {status:<18} {label[:25]:<26} "
             f"{output.classification_confidence:>5.2f}  {review}"
         )
-    print("-" * 90)
+    print("-" * 100)
     total_tokens = sum(tokens for _, _, tokens in results)
     print(f"Total model tokens used: {total_tokens}")
 
