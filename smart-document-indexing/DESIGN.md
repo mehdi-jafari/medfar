@@ -1,190 +1,246 @@
-# Design Document — Smart Document Indexing
+# Take-Home Assignment — Smart Document Indexing
 
-**Author:** Mehdi Jafari  
-**Project:** MEDFAR take-home — MYLE document indexing prototype  
-**Repository:** `smart-document-indexing/`
-
----
-
-## 1. Submission deliverables
-
-| Source | Requirement |
-|--------|-------------|
-| **Cursor Build Prompt** | Python prototype, 5 prompts, pipeline, structured JSON, **README** with design rationale |
-| **#0 Instructions PDF** | Could not extract text (image-only PDF). **Confirm with recruiter** if a separate written PDF is required beyond README + this document. |
-
-**What we submit:**
-
-1. GitHub repository with runnable code  
-2. `README.md` — setup, architecture, limitations  
-3. **`DESIGN.md` (this file)** — reasoning, rubrics, failure modes  
-4. `examples/` — sample outputs (no API key needed to inspect)  
-5. `eval/batch_report.json` — measurable results on all 6 PDFs  
+**Candidate:** Mehdi Jafari  
+**Role:** Senior Prompt Engineer — Smart Document Indexing  
+**Repository:** https://github.com/mehdi-jafari/medfar  
+**Code path:** `smart-document-indexing/`  
+**Time expectation:** 3–4 hours (per assignment brief)
 
 ---
 
-## 2. Architecture
+## Submission format
+
+Per the MEDFAR take-home assignment (*#0 Instructions - Take Home Assignment*):
+
+> **Format:** Written document of your choice (PDF, Notion, Google Doc, markdown)
+
+This document (`DESIGN.md` / `DESIGN.pdf`) is the **primary written submission**. The [GitHub repository](https://github.com/mehdi-jafari/medfar) provides runnable prompts, pipeline code, and sample outputs referenced below.
+
+**Included with submission:**
+
+| Deliverable | Location |
+|-------------|----------|
+| **GitHub repository** | https://github.com/mehdi-jafari/medfar |
+| Written assignment (this document) | `DESIGN.pdf` |
+| Prompts | `prompts/01` – `05_*.md` |
+| Pipeline code | `main.py`, `pipeline.py`, `extract.py`, etc. |
+| Output for all sample documents | `outputs/*.json` (generated via `main.py --all`) |
+| Reviewer-friendly samples | `examples/` |
+| Batch metrics | `eval/batch_report.json` |
+
+---
+
+# Part 1 — Build the Pipeline (~2 hours)
+
+## Context (from assignment)
+
+MEDFAR's Smart Document Indexing processes incoming clinical documents (upload or fax) to determine:
+
+- Document **class and subclass** (MYLE taxonomy)
+- **Short description** of content
+- **Patient identifying information** present in the document
+- **Relevant physician(s)**
+
+Patient matching to EMR records is **out of scope** — extract what is present only.
+
+Output must support downstream **semantic routing rules** (not designed here).
+
+## Pipeline architecture — chain vs single prompt
+
+**Decision: 5-step prompt chain**, orchestrated by `pipeline.py`.
+
+| Step | Prompt | Purpose |
+|------|--------|---------|
+| 0 | `extract.py` | PDF / fax text extraction (pymupdf → Tesseract → GPT-4o vision) |
+| 1 | `01_ocr_cleanup.md` | Clean OCR noise; preserve clinical facts |
+| 2 | `02_evidence_extraction.md` | Extract clues only — no classification |
+| 3 | `03_entity_extraction.md` | Patient identifiers + physicians |
+| 4 | `04_taxonomy_classification.md` | MYLE class/subclass + routing text |
+| 5 | `05_validation.md` | Supplementary LLM review |
+
+**Why not a single prompt?**
+
+A single prompt tends to hallucinate patient data, conflate keywords with document purpose (e.g. “referral” → Consultation Request), and skip explicit ambiguity handling. Separating evidence extraction before classification grounds taxonomy decisions. Isolating entity extraction prevents inventing identifiers during classification.
 
 ```
-PDF → extract_text() → Step 1 OCR cleanup → Step 2 Evidence
-                              ↓                    ↓
-                         Step 3 Entities ──→ Step 4 Classification
-                                                    ↓
-                                              merge() + Step 5 LLM review
-                                                    ↓
-                                    validators.finalize_output() → JSON
+PDF → extract → Step 1 → Step 2 Evidence ──┐
+              → Step 3 Entities ──────────┼→ Step 4 Classification → merge
+                                            → Step 5 + deterministic validation → JSON
 ```
 
-**Orchestration:** `pipeline.py` runs steps sequentially. Prompts do not call each other.
+## Handling ambiguous or missing information
 
-**Two-layer validation:**
+| Situation | Pipeline behaviour |
+|-----------|-------------------|
+| Missing patient name / de-identified sample | `null` fields + `ambiguities` list |
+| Placeholder physician (“Reading Physician”) | Rejected as name; noted in ambiguities |
+| Low classification confidence (&lt; 0.6) | `human_review_required = true` |
+| Invalid MYLE class/subclass pair | Blocking error + review flag |
+| Mixed document types in one PDF | Review flag; single best-fit class (page split not implemented) |
+| Hallucinated field not in source text | `blocking_errors` → `pipeline_status: fail` |
 
-| Layer | Where | Role |
-|-------|-------|------|
-| **Deterministic** | `validators.py` | Taxonomy check, confidence threshold, hallucination detection, placeholder physicians → `blocking_errors`, `warnings`, `pipeline_status` |
-| **LLM supplementary** | `05_validation.md` | Qualitative notes only; `is_valid: false` becomes a blocking error |
+Final status fields: `pipeline_status` (`pass` | `pass_with_review` | `fail`), `blocking_errors`, `warnings`, `human_review_required`.
 
-**Status semantics:**
+**Deterministic validation** (`validators.py`) is the primary safety layer. LLM validation (step 5) adds qualitative notes only.
 
-- `pass` — no blockers, no review needed  
-- `pass_with_review` — usable with human check  
-- `fail` — blocking errors (e.g. hallucinated patient name, LLM invalid)  
+## LLM choice
 
----
+**Used:** OpenAI **GPT-4o** (via `OPENAI_MODEL` in `.env`).
 
-## 3. Why prompt chaining?
+**Why:** Sample inputs are scanned faxes and image-only PDFs (prescription form). Strong document understanding and vision fallback are needed when embedded text is absent.
 
-A single mega-prompt tends to:
+**Considered but not benchmarked:** Gemini 1.5 Pro, Claude 3.5 Sonnet — same prompt templates could plug in via `llm_client.py`.
 
-- Hallucinate patient identifiers while classifying  
-- Conflate document purpose with keywords (“referral” → Consultation Request)  
-- Skip explicit ambiguity handling  
+**Tradeoff:** ~5 LLM calls per document (+ vision for image PDFs) — higher cost/latency than a single-call approach.
 
-**Design choice:** separate concerns per step.
+## What I discarded
 
-| Step | Isolated responsibility |
-|------|-------------------------|
-| 1 OCR cleanup | Fix noise without inventing facts |
-| 2 Evidence | Clues only — no classification |
-| 3 Entities | Patient + physicians — no EMR matching |
-| 4 Classification | MYLE mapping using evidence + text |
-| 5 Validation | Supplementary qualitative review |
+| Tried / considered | Outcome |
+|--------------------|---------|
+| Single mega-prompt | Hallucinations and misclassification on ambiguous docs |
+| EMR patient matching | Explicitly out of scope |
+| Page-level split indexing | Flagged for review instead; noted as future work |
+| LLM-only validation | Replaced with deterministic checks + supplementary LLM notes |
+| Production OCR vendor | pymupdf + optional Tesseract + vision fallback sufficient for prototype |
+| Fine-tuned classifiers | Out of time; prompt chain evaluable within 3–4 hours |
 
-Evidence before classification grounds taxonomy decisions. Entity extraction is isolated so identifiers are not invented during classification.
+## Output for all sample documents
 
----
+Six sample PDFs provided (assignment references five; six were included in the package). Batch run: **2026-07-09**, model **gpt-4o**.
 
-## 4. Evaluation rubrics (KPIs)
+| Document | Status | Predicted class/subclass | Expected | Match |
+|----------|--------|--------------------------|----------|-------|
+| Appointment notice | pass_with_review | Other / Patient Services | Other / Patient Services | Yes |
+| Consultation report | pass_with_review | Clinical Note / Specialist | Clinical Note or Consultation Reports / Specialist | Yes |
+| Imaging (ultrasound) | pass_with_review | Results / Imaging | Results / Imaging | Yes |
+| Prescription | pass_with_review | Requests / Other | Medication and Prescriptions / Prescription Form | No |
+| Referral declined (mixed) | **fail** | Requests / Consultation Requests | Mixed — review required | Partial |
+| Lab result | pass_with_review | Other / Other (0.20 conf) | Results / Laboratory | No |
 
-Implemented in `eval/scorer.py` and `eval/run_eval.py`.
+**Totals:** 3/6 taxonomy correct · 1/6 failed (hallucinated patient name on mixed doc) · Full JSON in `outputs/`.
 
-| Step | KPI | How measured |
-|------|-----|--------------|
-| 0 Extract | Char count, pages | Local only |
-| 1 OCR | Key field preservation, length delta | Gold `key_fields_raw` |
-| 2 Evidence | Evidence recall | `evidence_must_include` vs output |
-| 3 Entities | Patient field accuracy, physician recall | Gold labels |
-| 4 Classification | Class/subclass match (+ acceptable alternatives) | Gold labels |
-| 5 Validation | Review flag match, self-check | Gold `human_review_required` |
-| End-to-end | `pipeline_status`, classification accuracy | Batch report |
-
-**Batch command:** `python eval/run_eval.py`  
-**Interactive:** `streamlit run eval/app.py`
+Prompts: `prompts/`. Example outputs (no API key): `examples/`.
 
 ---
 
-## 5. Submission results (batch run)
+# Part 2 — Evaluation Rubric (~45 min)
 
-Run date: 2026-07-09 · Model: `gpt-4o` · Documents: 6
+## Rubric 1 — Taxonomy accuracy
 
-| Document | Status | Predicted class | Gold match | Review flag OK |
-|----------|--------|-----------------|------------|--------------|
-| Appointment notice | pass_with_review | Other / Patient Services | Yes | No (over-flagged) |
-| Consultation report | pass_with_review | Clinical Note / Specialist | Yes | No (over-flagged) |
-| Imaging | pass_with_review | Results / Imaging | Yes | Yes |
-| Prescription | pass_with_review | Requests / Other | **No** | Yes |
-| Referral declined | **fail** | Requests / Consultation Requests | **No** | Yes |
-| Lab result | pass_with_review | Other / Other | **No** | No |
+**Definition:** The assigned MYLE class/subclass correctly reflects the document's primary clinical or administrative purpose.
 
-**Summary:** 3/6 classification correct (50%) · 3/6 review-flag correct (50%) · 0 pass · 5 pass_with_review · 1 fail
+| | |
+|---|---|
+| **Strong** | Correct class/subclass with confidence ≥ 0.8; reasoning aligns with document purpose (not keywords alone). |
+| **Weak** | Wrong bucket (e.g. appointment confirmation classified as Consultation Request) or invalid taxonomy pair. |
 
-### Known failure modes
+**How to evaluate:** Gold labels per sample (`eval/labels/`); batch report classification accuracy. **Tradeoff:** Gold labels are manual and small-n; cheap to run but not statistically robust. Alternative: clinician adjudication panel — accurate but slow and expensive.
 
-1. **Prescription (image-only PDF)** — Vision OCR + “reauthorization” wording → `Requests` instead of `Medication and Prescriptions / Prescription Form`.  
-2. **Lab result (scanned form)** — Low text yield; repetitive patient header without clear result body → low confidence, `Other / Other`.  
-3. **Referral declined (mixed)** — Correctly flagged for review; **fail** due to hallucinated patient name not in source text. Page-level split not implemented.  
-4. **Appointment / consultation** — Classification correct but **over-flagged** for review (mixed-page heuristic + LLM notes).  
+## Rubric 2 — Extraction fidelity (no hallucination)
 
-### What works well
+**Definition:** Patient identifiers and physician names appear in the source document and are not invented.
 
-- Imaging ultrasound → `Results / Imaging` (0.90 confidence)  
-- Appointment notice → `Other / Patient Services` (after taxonomy prompt tuning)  
-- Consultation report → `Clinical Note / Specialist`  
-- Placeholder physician names rejected (`Reading Physician` → ambiguity, not fake name)  
-- Deterministic validation catches hallucinations on referral declined  
+| | |
+|---|---|
+| **Strong** | Fields match source text; missing data returned as `null` with ambiguities noted. |
+| **Weak** | Name or identifier present in JSON but absent from document text. |
 
----
+**How to evaluate:** Deterministic fuzzy match of extracted fields against cleaned source text (`validators.py`). **Tradeoff:** Fuzzy matching tolerates OCR variation but may miss subtle formatting differences; strict exact match would increase false failures.
 
-## 6. LLM choice
+## Rubric 3 — Safety / human review appropriateness
 
-**Default:** OpenAI `gpt-4o` (configurable via `OPENAI_MODEL`).
+**Definition:** The pipeline escalates ambiguous, mixed, or low-confidence documents to human review; clear documents are not unnecessarily blocked.
 
-**Rationale:** Scanned faxes, mixed French/English, image-only prescription PDFs need strong document understanding. Vision fallback used when pymupdf/Tesseract yield is low.
+| | |
+|---|---|
+| **Strong** | Mixed referral doc flagged; imaging report with clear class routes without false `fail`. |
+| **Weak** | Silent auto-approval of wrong class, or excessive review flags on straightforward docs. |
 
-**Alternatives:** Same prompt templates could plug into Gemini or Claude via a swapped `llm_client.py` — not benchmarked in this prototype.
+**How to evaluate:** Compare `human_review_required` and `pipeline_status` against gold `human_review_required`; measure review-flag precision/recall on labeled set. **Tradeoff:** Optimizing for recall (catch all bad docs) increases human workload; optimizing for precision reduces triage burden but risks missed errors.
 
-**Cost:** ~5 LLM calls per document (+ vision for image PDFs). Acknowledged limitation.
+## Rubric 4 — Routing support usefulness
 
----
+**Definition:** `routing_support_text` and physician roles provide a concise, factual summary usable by semantic routing rules.
 
-## 7. Taxonomy note
+| | |
+|---|---|
+| **Strong** | Short, specific summary (e.g. “Specialist appointment notice, consultation Apr 29 2026”); physician role supports `document_physician` routing. |
+| **Weak** | Generic text, hallucinated content, or placeholder physician name used as routing target. |
 
-MYLE `Summary` subclass corrected to **`Record Summary Request`** (single term; assignment PDF line-wrap had split it across lines). Removed standalone `Request` under `Summary` to avoid collision with the `Requests` class.
+**How to evaluate:** Manual review against assignment routing rule structure; optional embedding similarity to clinician-written queries. **Tradeoff:** Manual review is qualitative; automated semantic similarity needs a query benchmark not available in this exercise.
 
----
-
-## 8. Conscious tradeoffs (what we discarded)
-
-| Discarded | Why |
-|-----------|-----|
-| EMR patient matching | Out of scope |
-| Page-level split indexing | Prototype flags mixed docs for review; segments planned in ROADMAP |
-| Production OCR | pymupdf + optional Tesseract + GPT-4o vision fallback |
-| REST API / web UI | CLI + Streamlit eval only |
-| Fine-tuned classifiers | Prompt-based approach for take-home |
+**Implementation:** `eval/scorer.py`, `eval/run_eval.py`, Streamlit dashboard (`eval/app.py`).
 
 ---
 
-## 9. Limitations
+# Part 3 — Failure Modes & Validation (~60 min)
 
-- 6 sample documents only — not a golden benchmark  
-- 5 LLM calls per doc — latency and cost  
-- English/French mixed — no dedicated bilingual prompts  
-- Single class/subclass per PDF  
-- LLM validation can over-warn; deterministic layer is the trust anchor  
-- Tesseract not installed in test environment — prescription uses vision OCR  
+## Failure mode 1 — Keyword-driven misclassification
+
+**What it looks like:** Document classified by surface words rather than purpose. Example: appointment notice with “referral” and “consultation” → `Requests / Consultation Requests` instead of `Other / Patient Services`.
+
+**When it occurs:** Administrative notices, scheduling letters, declined referrals with clinical vocabulary; any doc where taxonomy labels overlap with document language.
+
+**How to test systematically:**
+
+- Labeled set with purpose-based gold classes (not keyword labels)
+- Batch eval per document type; track confusion matrix between `Requests` vs `Other / Patient Services`
+- Adversarial samples: confirmation letters that mention “request” or “referral”
+
+**Redesign (most clinically significant for routing):**
+
+- Add purpose-based rules in classification prompt (confirmations ≠ requests)
+- Require step 2 evidence to include `document_type_clues` before step 4 classifies
+- Lower auto-route confidence threshold; require `human_review_required` when evidence conflicts with class
+- Deterministic check: if `appointment_or_administrative_clues` present without `request_clues`, block `Requests/*` unless confidence very high
+
+## Failure mode 2 — Hallucinated or placeholder entities
+
+**What it looks like:** Patient name in JSON not on document; physician recorded as “Reading Physician” instead of `null` + ambiguity.
+
+**When it occurs:** De-identified samples, image-only PDFs, imaging reports with role labels only; LLM fills gaps when fields expected but absent.
+
+**How to test systematically:**
+
+- Deterministic validation: every non-null patient field must fuzzy-match source text
+- Placeholder name denylist (`validators.py`)
+- Inject de-identified documents; assert `name: null` and non-empty `ambiguities`
+- Track `blocking_errors` rate on gold set
+
+**Redesign:**
+
+- Post-process entities through `sanitize_physicians()` — reject role labels
+- `pipeline_status: fail` when hallucination detected (blocks silent auto-indexing)
+- Entity prompt explicitly forbids role labels as names
+- Human review step mandatory when any identifier field fails source-text check
 
 ---
 
-## 10. Roadmap (next steps)
+## MYLE taxonomy reference
 
-See **[ROADMAP.md](ROADMAP.md)** for detail. Priority order:
-
-1. **Eval as quality gate** — regression thresholds on batch report  
-2. **Prompt tuning** — prescription, lab, mixed referral from failure catalog  
-3. **Page-level segmentation** — per-page classification for mixed PDFs  
-4. **Production hardening** — OCR benchmark, cost controls, API integration  
+Mapped in `schema.py` per assignment taxonomy. Notable: `Summary` includes **Record Summary Request** (single subclass).
 
 ---
 
-## 11. How to reproduce
+## Limitations (prototype scope)
+
+- Six samples only; not production-ready OCR
+- Single class per PDF; mixed documents flagged not split
+- English/French mixed content without dedicated bilingual handling
+- 5 LLM calls per document — cost and latency
+- Assignment time box (3–4 hours) — depth over exhaustive coverage
+
+---
+
+## Reproduce results
 
 ```bash
-cd smart-document-indexing
-copy .env.example .env   # add OPENAI_API_KEY
+git clone https://github.com/mehdi-jafari/medfar.git
+cd medfar/smart-document-indexing
+copy .env.example .env   # OPENAI_API_KEY required
 .\.venv\Scripts\pip install -r requirements.txt
 .\.venv\Scripts\python main.py --all
 .\.venv\Scripts\python eval/run_eval.py
 ```
 
-Example outputs without API: `examples/`
+Repository: https://github.com/mehdi-jafari/medfar · Setup details: `README.md` · Future work: `ROADMAP.md`.

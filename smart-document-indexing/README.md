@@ -2,7 +2,9 @@
 
 MEDFAR take-home prototype: a Python pipeline that processes clinical PDF/fax documents and produces structured JSON for MYLE document indexing.
 
-**Design write-up:** [DESIGN.md](DESIGN.md) · **Roadmap:** [ROADMAP.md](ROADMAP.md) · **Example outputs:** [examples/](examples/)
+**Repository:** https://github.com/mehdi-jafari/medfar
+
+**Written submission:** [DESIGN.pdf](DESIGN.pdf) (assignment write-up) · [DESIGN.md](DESIGN.md) · **Roadmap:** [ROADMAP.md](ROADMAP.md) · **Examples:** [examples/](examples/)
 
 ## Quick start
 
@@ -70,15 +72,17 @@ Known issues and reasoning: [DESIGN.md §5](DESIGN.md#5-submission-results-batch
 
 ### Deliverables
 
-| Item | Location |
-|------|----------|
-| Runnable code + prompts | This repo |
-| Setup & architecture | `README.md` |
-| Design rationale, rubrics, failures | `DESIGN.md` |
+Per the take-home assignment (*#0 Instructions - Take Home Assignment*):
+
+| Requirement | Location |
+|-------------|----------|
+| **Written document** (PDF / markdown) | **`DESIGN.pdf`** — primary submission |
+| Prompts | `prompts/` |
+| Output for all sample documents | `outputs/` (run `main.py --all`) |
+| Runnable pipeline | [github.com/mehdi-jafari/medfar](https://github.com/mehdi-jafari/medfar) (`smart-document-indexing/`) |
+| Setup instructions | `README.md` |
 | Sample JSON (no API key) | `examples/` |
 | Batch metrics | `eval/batch_report.json` |
-
-The Cursor build prompt requires a **README**; `#0 Instructions` PDF was image-only and could not be parsed — confirm with MEDFAR if a separate PDF is required.
 
 ### Optional: Tesseract OCR
 
